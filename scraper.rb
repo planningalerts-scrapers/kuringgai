@@ -12,7 +12,7 @@ def scrape_page(page, comment_url)
       "council_reference" => tds[1],
       "date_received" => Date.new(year, month, day).to_s,
       "description" => tds[3].gsub("&amp;", "&").split("<br>")[1].squeeze.strip,
-      "address" => tds[3].gsub("&amp;", "&").split("<br>")[0].gsub("\r", " ").squeeze.strip,
+      "address" => tds[3].gsub("&amp;", "&").split("<br>")[0].gsub("\r", " ").gsub("<strong>","").gsub("</strong>","").squeeze.strip,
       "date_scraped" => Date.today.to_s,
       "comment_url" => comment_url
     }
@@ -41,8 +41,8 @@ def click(page, doc)
   end
 end
 
-url = "http://pdonline.ipswich.qld.gov.au/pdonline/modules/applicationmaster/default.aspx?page=found&1=thismonth&5=T&6=F"
-comment_url = "mailto:plandev@ipswich.qld.gov.au"
+url = "http://datracking.kmc.nsw.gov.au/datrackingUI/Modules/applicationmaster/default.aspx?page=found&1=thismonth&4a=DA%27,%27Section96%27,%27Section82A%27,%27Section95a&6=F"
+comment_url = "mailto:kmc@kmc.nsw.gov.au"
 
 agent = Mechanize.new
 
@@ -50,7 +50,7 @@ agent = Mechanize.new
 page = agent.get(url)
 
 form = page.forms.first
-button = form.button_with(value: "I Agree")
+button = form.button_with(value: "Agree")
 form.submit(button)
 # It doesn't even redirect to the correct place. Ugh
 page = agent.get(url)
