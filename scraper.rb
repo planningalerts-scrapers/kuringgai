@@ -1,23 +1,32 @@
 require 'scraperwiki'
 require 'mechanize'
 
-# Scraping from Masterview 2.0
+case ENV['MORPH_PERIOD']
+  when 'lastmonth'
+    period = 'LM'
+  when 'thismonth'
+    period = 'TM'
+  else
+    period = 'TW'
+end
+puts "Collecting data from " + period
 
-def scrape_page(page, comment_url)
-  page.at("table.rgMasterTable").search("tr.rgRow,tr.rgAltRow").each do |tr|
-    tds = tr.search('td').map{|t| t.inner_html.gsub("\r\n", "").strip}
-    day, month, year = tds[2].split("/").map{|s| s.to_i}
+
+def scrape_page(page, info_url, comment_url)
+  page.at("table.grid").search("tr.normalRow,tr.alternateRow").each do |tr|
+    day, month, year = tr.search('td')[1].inner_text.split("/").map{|s| s.to_i}
     record = {
-      "info_url" => (page.uri + tr.search('td').at('a')["href"]).to_s,
-      "council_reference" => tds[1],
+      "info_url" => info_url + tr.search('a')[0].inner_text,
+      "council_reference" => tr.search('a')[0].inner_text,
       "date_received" => Date.new(year, month, day).to_s,
-      "description" => tds[3].gsub("&amp;", "&").split("<br>")[1].squeeze(" ").strip,
-      "address" => tds[3].gsub("&amp;", "&").split("<br>")[0].gsub("\r", " ").gsub("<strong>","").gsub("</strong>","").squeeze(" ").strip + ", NSW",
+      "description" => tr.search('td')[2].inner_text.squeeze(" ").strip,
+      "address" => tr.search('a')[1].inner_text,
       "date_scraped" => Date.today.to_s,
       "comment_url" => comment_url
     }
-    #p record
+#     p record
     if (ScraperWiki.select("* from data where `council_reference`='#{record['council_reference']}'").empty? rescue true)
+      puts "Saving record " + record['council_reference'] + ", " + record['address']
       ScraperWiki.save_sqlite(['council_reference'], record)
     else
       puts "Skipping already saved record " + record['council_reference']
@@ -41,27 +50,22 @@ def click(page, doc)
   end
 end
 
-url = "http://datracking.kmc.nsw.gov.au/datrackingUI/Modules/applicationmaster/default.aspx?page=found&1=thismonth&4a=DA%27,%27Section96%27,%27Section82A%27,%27Section95a&6=F"
+
+url = "https://eservices.kmc.nsw.gov.au/T1ePropertyProd/P1/eTrack/eTrackApplicationSearchResults.aspx?Field=S&Period=" + period + "&r=KC_WEBGUEST&f=P1.ETR.SEARCH.STW"
+info_url = "https://eservices.kmc.nsw.gov.au/T1ePropertyProd/P1/eTrack/eTrackApplicationDetails.aspx?r=KC_WEBGUEST&f=$P1.ETR.APPDET.VIW&ApplicationId="
 comment_url = "mailto:kmc@kmc.nsw.gov.au"
 
 agent = Mechanize.new
 
-# Read in a page
-page = agent.get(url)
-
-form = page.forms.first
-button = form.button_with(value: "Agree")
-form.submit(button)
-# It doesn't even redirect to the correct place. Ugh
 page = agent.get(url)
 current_page_no = 1
 next_page_link = true
 
 while next_page_link
   puts "Scraping page #{current_page_no}..."
-  scrape_page(page, comment_url)
+  scrape_page(page, info_url, comment_url)
 
-  page_links = page.at(".rgNumPart")
+  page_links = page.at(".pagerRow")
   if page_links
     next_page_link = page_links.search("a").find{|a| a.inner_text == (current_page_no + 1).to_s}
   else
